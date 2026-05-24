@@ -1,8 +1,5 @@
 // ─────────────────────────────────────────────
-//  SCHEDULER
-//  Runs two jobs:
-//  1. Daily at 6 AM → generate a new post package
-//  2. Every 5 min → check if approved posts should publish
+//  BUILDIN EMPIRES — SCHEDULER
 // ─────────────────────────────────────────────
 
 import cron from 'node-cron';
@@ -12,17 +9,19 @@ import { CONFIG } from './config.js';
 import { generatePost } from './generator.js';
 import { publishApprovedPost } from './poster.js';
 
-const APPROVED_DIR = '/home/claude/darkluxury/queue/approved';
+const APPROVED_DIR = '/app/queue/approved';
+const LOG_FILE     = '/app/logs/activity.log';
 
-// ── Check if now is a posting window ──────────
+async function log(msg) {
+  const line = `${new Date().toISOString()} | ${msg}\n`;
+  console.log(msg);
+  await fs.appendFile(LOG_FILE, line).catch(() => {});
+}
 
 function isPostingWindow() {
-  const now = new Date();
+  const now     = new Date();
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-  const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
   const windows = CONFIG.SCHEDULE[dayName] || [];
-  // Match within a 10-minute window of scheduled time
   return windows.some(w => {
     const [wh, wm] = w.split(':').map(Number);
     const diff = Math.abs((now.getHours() * 60 + now.getMinutes()) - (wh * 60 + wm));
@@ -30,76 +29,42 @@ function isPostingWindow() {
   });
 }
 
-// ── Auto-publisher: runs every 5 minutes ──────
-
-async function checkAndPublishApproved() {
+async function checkAndPublish() {
   if (!isPostingWindow()) return;
-
   let files;
-  try {
-    files = await fs.readdir(APPROVED_DIR);
-  } catch {
-    return;
-  }
+  try { files = await fs.readdir(APPROVED_DIR); }
+  catch { return; }
 
-  const jsonFiles = files.filter(f => f.endsWith('.json'));
+  const jsonFiles = files.filter(f => f.endsWith('.json')).sort();
   if (jsonFiles.length === 0) return;
 
-  // Publish the oldest approved post
-  const oldest = jsonFiles.sort()[0];
-  const filePath = path.join(APPROVED_DIR, oldest);
-
+  const filePath = path.join(APPROVED_DIR, jsonFiles[0]);
   try {
     const post = JSON.parse(await fs.readFile(filePath, 'utf8'));
-
     if (!post.imageUrls || post.imageUrls.length === 0) {
-      console.log(`[Scheduler] Skipping ${post.id} — no image URLs set yet. Add them in the approval UI.`);
+      await log(`[Scheduler] Skipping ${post.id} — no image URLs set yet`);
       return;
     }
-
-    console.log(`\n[Scheduler] Posting window detected — publishing ${post.id}`);
+    await log(`[Scheduler] Posting window — publishing ${post.id}`);
     await publishApprovedPost(post);
-    console.log(`[Scheduler] Success!`);
+    await log(`[Scheduler] Posted successfully!`);
   } catch (e) {
-    console.error(`[Scheduler] Publish failed:`, e.message);
-    await fs.appendFile(
-      '/home/claude/darkluxury/logs/errors.log',
-      `${new Date().toISOString()} | ${e.message}\n`
-    );
+    await log(`[Scheduler] Publish failed: ${e.message}`);
   }
 }
-
-// ── Daily generator: runs at 6 AM ─────────────
 
 async function runDailyGeneration() {
   try {
-    console.log('\n[Scheduler] Running daily content generation...');
+    await log('[Scheduler] Running daily content generation...');
     const post = await generatePost();
-    console.log(`[Scheduler] Generated: ${post.id} (${post.type})`);
-    console.log(`[Scheduler] Open your approval UI to review it!`);
-
-    await fs.appendFile(
-      '/home/claude/darkluxury/logs/generated.log',
-      `${new Date().toISOString()} | ${post.id} | ${post.type} | ${post.topic}\n`
-    );
+    if (post) await log(`[Scheduler] Generated: ${post.id} (${post.type})`);
   } catch (e) {
-    console.error('[Scheduler] Generation failed:', e.message);
-    await fs.appendFile(
-      '/home/claude/darkluxury/logs/errors.log',
-      `${new Date().toISOString()} | GENERATION FAILED | ${e.message}\n`
-    );
+    await log(`[Scheduler] Generation failed: ${e.message}`);
   }
 }
 
-// ── Start scheduler ───────────────────────────
-
 export function startScheduler() {
-  // Generate content daily at 6 AM
   cron.schedule('0 6 * * *', runDailyGeneration, { timezone: 'America/New_York' });
-
-  // Check posting windows every 5 minutes
-  cron.schedule('*/5 * * * *', checkAndPublishApproved);
-
-  console.log('[Scheduler] Started — content generates daily at 6 AM ET');
-  console.log('[Scheduler] Posting windows checked every 5 minutes');
+  cron.schedule('*/5 * * * *', checkAndPublish);
+  console.log('[Scheduler] Started — generates daily at 6 AM ET, checks posting windows every 5 min');
 }
