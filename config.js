@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-//  DARK LUXURY INSTAGRAM AUTOMATION — CONFIG
+//  BUILDIN EMPIRES — INSTAGRAM AUTOMATION CONFIG
 //  Edit POST_SCHEDULE below to control exactly
 //  what type of post goes out each day
 // ─────────────────────────────────────────────
@@ -31,18 +31,11 @@ export const CONFIG = {
   },
 
   // ── POST TYPE PER DAY ────────────────────────
-  // Options for each day:
-  //   'quote'    — single image with one powerful quote (easiest, 1 image)
-  //   'carousel' — slideshow of 8 slides (most saves, needs 8 images)
-  //   'reel'     — short video format (most reach, needs 1 image or video)
-  //   'none'     — skip this day entirely
-  //
-  // RECOMMENDED STARTER SCHEDULE:
-  //   Mon/Thu = carousel (saves algorithm)
-  //   Tue/Fri = reel (reach algorithm)
-  //   Wed     = quote (DM share trigger)
-  //   Sat/Sun = none (rest days)
-  //
+  // Options:
+  //   'quote'    — single image with one powerful quote (1 image needed)
+  //   'carousel' — slideshow of 8 slides (8 images needed, most saves)
+  //   'reel'     — short video format (1 image or video, most reach)
+  //   'none'     — no post that day
   POST_SCHEDULE: {
     monday:    'carousel',
     tuesday:   'reel',
@@ -53,10 +46,12 @@ export const CONFIG = {
     sunday:    'none',
   },
 
-  // ── CONTENT SETTINGS ────────────────────────
-  NICHE: 'dark luxury wealth mindset',
-  ACCOUNT_VOICE: 'cold, direct, aspirational — never desperate, never loud. Think: midnight boardroom, not hustle bro.',
-  COLOR_PALETTE: 'deep black, muted gold, slate grey, off-white',
+  // ── BRAND IDENTITY ───────────────────────────
+  ACCOUNT_NAME:   '@buildinempires',
+  NICHE:          'dark luxury wealth mindset',
+  ACCOUNT_VOICE:  'cold, direct, aspirational — never desperate, never loud. Think: midnight boardroom, not hustle bro.',
+  COLOR_PALETTE:  'deep black, muted gold, slate grey, off-white',
+  DM_TRIGGER:     'EMPIRE',  // word followers comment to get auto-reply
 
   // ── HASHTAG SETS ─────────────────────────────
   HASHTAG_SETS: {
@@ -66,7 +61,7 @@ export const CONFIG = {
   },
 
   // ── TOPIC POOL ───────────────────────────────
-  // Claude cycles through these topics daily
+  // Claude cycles through these daily
   // Add your own topics to this list anytime
   TOPIC_POOL: [
     'The hidden psychology of old money vs new money',
