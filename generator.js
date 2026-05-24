@@ -1,7 +1,5 @@
 // ─────────────────────────────────────────────
 //  BUILDIN EMPIRES — CONTENT GENERATOR
-//  Calls Claude to produce a full post package
-//  based on the POST_SCHEDULE in config.js
 // ─────────────────────────────────────────────
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -11,13 +9,13 @@ import { CONFIG } from './config.js';
 
 const client = new Anthropic({ apiKey: CONFIG.ANTHROPIC_API_KEY });
 
-// ── Get today's post type from schedule ───────
+const PENDING_DIR = '/app/queue/pending';
+
 function getTodayPostType() {
   const day = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
   return CONFIG.POST_SCHEDULE[day] || 'quote';
 }
 
-// ── Get today's topic (cycles through pool) ───
 function getTodayTopic() {
   const dayOfYear = Math.floor(
     (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000
@@ -25,14 +23,12 @@ function getTodayTopic() {
   return CONFIG.TOPIC_POOL[dayOfYear % CONFIG.TOPIC_POOL.length];
 }
 
-// ── Build hashtags based on post type ─────────
 function getHashtags(postType) {
   if (postType === 'carousel') return `${CONFIG.HASHTAG_SETS.wealth}\n${CONFIG.HASHTAG_SETS.discipline}`;
   if (postType === 'reel')     return `${CONFIG.HASHTAG_SETS.discipline}\n${CONFIG.HASHTAG_SETS.quotes}`;
   return `${CONFIG.HASHTAG_SETS.quotes}\n${CONFIG.HASHTAG_SETS.wealth}`;
 }
 
-// ── PROMPT: Carousel ──────────────────────────
 function buildCarouselPrompt(topic) {
   return `You are the creative director of ${CONFIG.ACCOUNT_NAME}, a dark luxury wealth mindset Instagram account.
 Brand voice: ${CONFIG.ACCOUNT_VOICE}
@@ -69,7 +65,6 @@ Generate a CAROUSEL POST (8 slides + cover + CTA) with this exact JSON structure
 Return ONLY valid JSON. No markdown fences. No explanation.`;
 }
 
-// ── PROMPT: Reel ──────────────────────────────
 function buildReelPrompt(topic) {
   return `You are the creative director of ${CONFIG.ACCOUNT_NAME}, a dark luxury wealth mindset Instagram account.
 Brand voice: ${CONFIG.ACCOUNT_VOICE}
@@ -87,15 +82,14 @@ Generate a REEL POST with this exact JSON structure:
     {"second": 12, "text": "final statement or CTA"}
   ],
   "caption": "2-3 sentence caption. No emojis. Ends with 'Comment ${CONFIG.DM_TRIGGER} if you agree.'",
-  "image_prompt": "Cinematic still image for Reel background. Dark luxury style: black marble, single candle, penthouse view at night, luxury car interior detail — hyper-realistic, no people, moody low-key lighting, deep blacks and muted gold.",
-  "audio_suggestion": "Describe the vibe of audio to search on Instagram. Example: 'dark cinematic piano 90 BPM' or 'moody lo-fi jazz low bass'",
+  "image_prompt": "Cinematic still image for Reel background. Dark luxury: black marble, single candle, penthouse view at night, luxury car interior — hyper-realistic, no people, moody low-key lighting, deep blacks and muted gold.",
+  "audio_suggestion": "Describe audio vibe to search on Instagram. Example: 'dark cinematic piano 90 BPM' or 'moody lo-fi jazz low bass'",
   "alt_text": "Plain text description of the visual for accessibility"
 }
 
 Return ONLY valid JSON. No markdown fences. No explanation.`;
 }
 
-// ── PROMPT: Quote ─────────────────────────────
 function buildQuotePrompt(topic) {
   return `You are the creative director of ${CONFIG.ACCOUNT_NAME}, a dark luxury wealth mindset Instagram account.
 Brand voice: ${CONFIG.ACCOUNT_VOICE}
@@ -106,7 +100,7 @@ Generate a QUOTE POST with this exact JSON structure:
 {
   "quote": "One sentence. Cold, sharp, true. Under 12 words. Original thought — no attribution needed.",
   "subtext": "1 optional line beneath the quote. Max 8 words. Lands like a punch.",
-  "caption": "1-2 sentences only. The quote says everything — caption adds minimal context. End with 'Send this to someone who needed it.'",
+  "caption": "1-2 sentences only. End with 'Send this to someone who needed it.'",
   "image_prompt": "Dark luxury background for quote card. Examples: extreme close-up of black leather, rain on a penthouse window at night, blurred city lights at 3am, empty luxury hotel corridor, single lit candle on black. Cinematic, no people, ultra high contrast, muted gold tones.",
   "alt_text": "Plain text description of the visual for accessibility"
 }
@@ -114,7 +108,6 @@ Generate a QUOTE POST with this exact JSON structure:
 Return ONLY valid JSON. No markdown fences. No explanation.`;
 }
 
-// ── Main generate function ────────────────────
 export async function generatePost(overrideType = null) {
   const postType = overrideType || getTodayPostType();
   const topic    = getTodayTopic();
@@ -147,7 +140,7 @@ export async function generatePost(overrideType = null) {
     parsed = JSON.parse(rawContent);
   } catch (e) {
     console.error('[Generator] JSON parse failed:', e.message);
-    throw new Error('Claude returned invalid JSON — retrying next cycle');
+    throw new Error('Claude returned invalid JSON');
   }
 
   const postId = `${postType}_${Date.now()}`;
@@ -162,9 +155,10 @@ export async function generatePost(overrideType = null) {
     content:     parsed,
   };
 
-  const filePath = path.join('/home/claude/darkluxury/queue/pending', `${postId}.json`);
+  await fs.mkdir(PENDING_DIR, { recursive: true });
+  const filePath = path.join(PENDING_DIR, `${postId}.json`);
   await fs.writeFile(filePath, JSON.stringify(postPackage, null, 2));
-  console.log(`[Generator] Saved to queue: ${filePath}`);
+  console.log(`[Generator] Saved: ${filePath}`);
 
   return postPackage;
 }
